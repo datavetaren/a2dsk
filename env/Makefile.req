@@ -1,0 +1,76 @@
+#
+# Requirements checking
+# (Most people use ./configure, but I felt that in practice
+#  you don't need a complicated requirements checker. A simple one should
+#  suffice.)
+
+#
+# BASE REQUIREMENTS
+#
+BOOST_REQ := 107400
+BOOST_REQ_STR := 1_74
+
+#
+# My error function
+#
+
+define err
+    $(info ERROR $(1))
+    $(info Requirements:
+           1. sed command
+           2. g++ with C++14 support
+           3. Boost version $(BOOST_REQ_STR) or later
+    $(error requirements check failed)
+endef
+
+#
+# Check existance of SED
+#
+CHECK_SED := $(shell command 2>&1 echo "foo" | sed 's/foo/bar/g' 2>&1 ; echo "exit is $$?")
+
+ifeq "$(findstring bar exit is 0, $(CHECK_SED))" ""
+      $(call err, Could not run sed. Please check environment.)
+endif
+
+
+#
+# Check existance of GCC (G++)
+#
+
+CHECK_GCC := $(shell command 2>&1 g++ >/dev/null --version ; echo "exit is $$?")
+
+ifneq "$(findstring not found, $(CHECK_GCC))" ""
+    $(call err, Could not run g++. Please install g++.)
+endif
+
+ifeq "$(findstring exit is 0, $(CHECK_GCC))" ""
+    $(call err, Error while running g++ --version. Check installation.)
+endif
+
+#
+# Check g++ support for c++14
+#
+
+CHECK_C14 := $(shell echo "int main(int argc, char *argv[]) { auto x = 0; return x; }" >/tmp/check_c14.cpp; g++ -std=c++14 2>&1 /tmp/check_c14.cpp -o /tmp/c14_check.out)
+
+ifneq "$(CHECK_C14)" ""
+   $(call err, Error while checking support for c++14 for g++. Please check installation: $(CHECK_C14))
+endif
+
+#
+# Check for BOOST
+#
+
+
+CHECK_BOOST := $(shell printf '\043include <boost/version.hpp>\nint main(int argc, char *argv[]) { return 0; }' >/tmp/check_boost.cpp; g++ -I $(BOOST_INCLUDE) -std=c++14 2>&1 /tmp/check_boost.cpp -o /tmp/check_boost.out)
+
+ifneq "$(CHECK_BOOST)" ""
+   $(call err, Couldn't find BOOST. Please download and install BOOST v$(BOOST_REQ_STR) or later.)
+endif
+
+CHECK_BOOST_VERSION := $(shell printf "\043include <stdio.h>\n\043include <boost/version.hpp>\nint main(int argc, char *argv[]) { printf(\"version %s\", BOOST_LIB_VERSION); return !(BOOST_VERSION >= $(BOOST_REQ)); }" >/tmp/check_boost_ver.cpp; g++ -I $(BOOST_INCLUDE) -std=c++14 2>&1 /tmp/check_boost_ver.cpp -o /tmp/check_boost_ver.out; /tmp/check_boost_ver.out; echo exit is $$?)
+
+ifeq "$(findstring exit is 0, $(CHECK_BOOST_VERSION))" ""
+   FOUND_VER := $(shell echo $(CHECK_BOOST_VERSION) | sed -n 's/.*version \([[:digit:]]*_[[:digit:]]*\).*/\1/p')
+   $(call err, BOOST version $(FOUND_VER) was found but version $(BOOST_REQ_STR) is required)
+endif
